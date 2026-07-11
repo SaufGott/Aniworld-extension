@@ -1,6 +1,7 @@
 # AniWorld Helper — Browser Extension
 
 A Manifest V3 Chrome/Edge browser extension that enhances your anime streaming experience on [aniworld.to](https://aniworld.to) and [s.to](https://s.to).
+! This Extension is vibe-coded and i have no clue how this has been coded or if there are any safety-risks. Please use on your own risk, it works tho :D
 
 ## Features
 
