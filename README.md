@@ -46,7 +46,19 @@ Settings are saved per anime and persist across browser sessions.
 
 ### Auto-start and the browser autoplay policy
 
-The extension clicks the play button of the embedded player (JW Player / Video.js / hoster overlays) and then calls `video.play()`. Browsers only allow autoplay **with sound** if the page already has a real user gesture or the domain has a high media-engagement score, so on some hosters playback can still be refused. In that case the extension falls back to muted autoplay and restores the audio on your first click inside the player. This is a browser restriction, not an extension bug — it is why the play button appears in the first place.
+A click from a content script is **not** a user activation, so the autoplay policy still refuses playback on hoster origins (`NotAllowedError`). The extension handles this in three steps:
+
+1. It calls the player's own API (`jwplayer()` for VOE, `videojs.getPlayer()` for Video.js hosters) and clicks the play overlay.
+2. If the browser answers with `NotAllowedError`, the background dispatches a **trusted** click through `chrome.debugger` (`Input.dispatchMouseEvent`) at the play button's position. A trusted input event *is* a user activation, so the player is allowed to start. This is why the `debugger` permission is in the manifest — you will see the "started debugging this browser" banner briefly while it happens.
+3. If that still fails, it falls back to muted autoplay (always allowed) and restores the audio on your first real click inside the player.
+
+The coordinates for the trusted click are computed by adding the play button's position inside the player iframe to the iframe's position on the page, so it only works while the player is embedded on aniworld — not when the hoster is opened in its own tab.
+
+If you do not want the debugger permission, set the autoplay policy in the browser instead: `edge://flags/#autoplay-policy` (or `chrome://flags/#autoplay-policy`) → **No user gesture is required**. Then step 1 alone is enough.
+
+### Content Security Policy warning
+
+DevTools may report *"Content Security Policy of your site blocks the use of `eval`"* on the hoster page. That comes from the player's own scripts, not from this extension — the extension source contains no `eval`, `new Function` or string-based timers. It is unrelated to autoplay and can be ignored.
 
 ## Why Edge keeps removing the extension
 
@@ -75,7 +87,8 @@ Store submission checklist:
 
 ### 1.1.0
 - Countdown overlay now uses the extension's own design tokens (`#637cf9` / `#181922`) instead of the orange accent.
-- Added Auto-Start Playback: the extension presses the player's play button on the next episode. It now keeps asking for up to 30 s (players create the `<video>` element late), calls the player's own API when one is exposed (JW Player / Video.js), and falls back to muted autoplay when the browser refuses autoplay with sound.
+- Added Auto-Start Playback: the extension presses the player's play button on the next episode. It calls the player's own API when one is exposed (JW Player / Video.js), keeps asking for up to 30 s because hoster players create the `<video>` element late, dispatches a **trusted** click through `chrome.debugger` when the autoplay policy refuses (`NotAllowedError`), and falls back to muted autoplay if nothing else works.
+- Fixed the audio-restore handler firing on the extension's own synthetic clicks (`event.isTrusted`), which unmutated the player and made the browser pause it again.
 - Auto-Next continues with the first episode of the next season when the current season ends.
 - Settings panel embedded in the episode page: gear button in the "Wähle einen AniWorld Stream / Hoster" header bar, same design as the popup.
 - New toggle in the popup for Auto-Start Playback.

@@ -33,6 +33,21 @@ if (animeKey) {
 
 // Listen for messages from the background service worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'resolve_click_coords') {
+    // The player iframe is the only full-size frame on the page; the share buttons are small.
+    const frame = document.querySelector('.hosterSiteVideo iframe') || document.querySelector('iframe');
+    if (!frame) {
+      sendResponse(null);
+      return;
+    }
+    const rect = frame.getBoundingClientRect();
+    sendResponse({
+      x: Math.round(rect.left + message.localX),
+      y: Math.round(rect.top + message.localY)
+    });
+    return;
+  }
+
   if (message.action === 'navigate_next') {
     chrome.storage.local.get(['autoNext'], (data) => {
       const autoNextEnabled = data.autoNext !== false; // default true

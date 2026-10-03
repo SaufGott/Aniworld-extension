@@ -4,7 +4,8 @@
   "version": "1.1.0",
   "description": "Automatically switches to the next episode, starts playback and skips intros on aniworld.to",
   "permissions": [
-    "storage"
+    "storage",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"

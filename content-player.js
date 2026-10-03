@@ -22,12 +22,14 @@ const PLAY_BUTTON_SELECTORS = [
 const START_WINDOW_MS = 30000;
 const START_RETRY_DELAY = 1500;
 const MAX_START_ATTEMPTS = 15;
+const MAX_TRUSTED_CLICKS = 3;
 
 // Global state flags to prevent duplicate triggers across source reloads
 let globalHasSkippedIntro = false;
 let globalHasTriggeredOutro = false;
 let startAttempts = 0;
 let startDeadline = 0;
+let trustedClicks = 0;
 let audioFallbackUsed = false;
 let gaveUpOnStart = false;
 
@@ -193,7 +195,7 @@ function setupVideoListeners(video) {
 }
 
 // Ask the player to start: its own API first, then the visible play overlay, then the element itself
-function requestStart(video) {
+async function requestStart(video) {
     if (!settings.autoPlayEnabled || gaveUpOnStart) return;
     if (!startDeadline) startDeadline = Date.now() + START_WINDOW_MS;
     if (!video.paused) return;
@@ -213,25 +215,64 @@ function requestStart(video) {
     const button = findPlayButton();
     if (button) safeClick(button);
 
-    const result = video.play();
-    if (!result || typeof result.catch !== 'function') return;
-
-    result.then(() => {
+    try {
+        await video.play();
         console.log('%c[AniWorld Helper] Playback started automatically.', 'color: #10B981; font-weight: bold;');
-    }).catch((error) => {
-        // Browsers block autoplay with sound until the page has a real user gesture.
-        // Muted autoplay is always allowed, so use it as a fallback and hand the audio
-        // back on the first click inside the player.
-        if (error.name === 'NotAllowedError' && !audioFallbackUsed) {
+        return;
+    } catch (error) {
+        if (error.name !== 'NotAllowedError') {
+            console.log(`[AniWorld Helper] Start attempt ${startAttempts} failed (${error.name}). Retrying...`);
+            setTimeout(() => requestStart(video), START_RETRY_DELAY);
+            return;
+        }
+
+        // Autoplay policy: a click from a content script is not a user activation.
+        // Ask the background to dispatch a trusted click on the same play button.
+        if (button && trustedClicks < MAX_TRUSTED_CLICKS) {
+            const rect = button.getBoundingClientRect();
+            const result = await requestTrustedClick(
+                Math.round(rect.left + rect.width / 2),
+                Math.round(rect.top + rect.height / 2)
+            );
+
+            if (result && result.ok) {
+                console.log(`[AniWorld Helper] Trusted click dispatched at ${result.x},${result.y}.`);
+                await sleep(START_RETRY_DELAY);
+                if (!video.paused) {
+                    console.log('%c[AniWorld Helper] Playback started by trusted click.', 'color: #10B981; font-weight: bold;');
+                    return;
+                }
+            } else {
+                console.log('[AniWorld Helper] Trusted click failed:', result && result.error);
+            }
+        }
+
+        // Last resort: muted autoplay is always allowed. Audio comes back on the first
+        // real click inside the player.
+        if (!audioFallbackUsed && trustedClicks >= MAX_TRUSTED_CLICKS) {
             audioFallbackUsed = true;
             video.muted = true;
             armAudioRestore(video);
-            console.log('[AniWorld Helper] Autoplay with sound is blocked by the browser — retrying muted. Click anywhere in the player to get audio back.');
-        } else {
-            console.log(`[AniWorld Helper] Start attempt ${startAttempts} failed (${error.name}). Retrying...`);
+            console.log('[AniWorld Helper] Falling back to muted autoplay. Click anywhere in the player to get audio back.');
         }
 
         setTimeout(() => requestStart(video), START_RETRY_DELAY);
+    }
+}
+
+function requestTrustedClick(x, y) {
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ action: 'trusted_click', x, y }, (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve({ ok: false, error: chrome.runtime.lastError.message });
+                    return;
+                }
+                resolve(response || { ok: false, error: 'no response' });
+            });
+        } catch (error) {
+            resolve({ ok: false, error: error.message });
+        }
     });
 }
 
@@ -266,7 +307,10 @@ function callPlayerApi() {
 }
 
 function armAudioRestore(video) {
-    document.addEventListener('click', () => {
+    document.addEventListener('click', (event) => {
+        // Only a real user click may restore the audio, otherwise our own synthetic
+        // clicks unmute the element and the browser pauses it again.
+        if (!event.isTrusted) return;
         if (video.muted) {
             video.muted = false;
             console.log('[AniWorld Helper] Audio restored after user interaction.');
@@ -300,4 +344,8 @@ function safeClick(element) {
     } catch (error) {
         console.log('[AniWorld Helper] Play button click failed:', error.message);
     }
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
