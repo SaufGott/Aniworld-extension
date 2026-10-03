@@ -296,6 +296,13 @@ function injectSettingsUi() {
 
   injectSettingsStyles();
 
+  // The header bar is already full width on the page, so the button sits at its right edge.
+  host.style.display = 'flex';
+  host.style.alignItems = 'center';
+  host.style.justifyContent = 'space-between';
+  host.style.boxSizing = 'border-box';
+  host.style.minWidth = '100%';
+
   const button = document.createElement('button');
   button.id = 'awh-open';
   button.type = 'button';
@@ -416,8 +423,8 @@ function injectSettingsStyles() {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      margin-left: 12px;
-      vertical-align: middle;
+      margin-left: auto;
+      flex-shrink: 0;
       background: rgba(255, 255, 255, 0.16);
       border: 1px solid rgba(255, 255, 255, 0.35);
       color: #ffffff;
@@ -435,6 +442,9 @@ function injectSettingsStyles() {
     #awh-panel {
       display: none;
       margin-top: 12px;
+    }
+    .hosterSectionTitle h3 {
+      margin: 0;
     }
     #awh-panel.awh-open {
       display: block;
