@@ -100,4 +100,4 @@ Store submission checklist:
 
 ## License
 
-MIT License — feel free to fork and adapt.
+[MIT License](LICENSE) — feel free to fork and adapt.
