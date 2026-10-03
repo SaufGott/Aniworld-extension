@@ -19,6 +19,7 @@ Thumbs.db
 
 # Extension package zip (generated for store submission)
 *.zip
+dist/
 
 # Walkthrough / notes
 walkthrough.md

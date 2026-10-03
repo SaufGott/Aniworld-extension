@@ -5,11 +5,11 @@ A Manifest V3 Chrome/Edge browser extension that enhances your anime streaming e
 
 ## Features
 
-- ⏭️ **Auto-Next Episode** — Automatically transitions to the next episode when the current one ends, with a 5-second countdown overlay you can cancel or skip.
+- ⏭️ **Auto-Next Episode** — Automatically transitions to the next episode when the current one ends, with a 5-second countdown overlay you can cancel or skip. Continues into the **first episode of the next season** when a season ends.
 - ▶️ **Auto-Start Playback** — After the next episode loads, the extension presses the player's play button for you, so you do not have to click it on every episode.
 - ⏩ **Intro Skip** — Automatically jumps past the opening credits to your configured timestamp (per anime).
 - ⏮️ **Outro Skip** — Triggers the next episode early when a configurable amount of time remains, so you never have to sit through long ending sequences.
-- 🎛️ **Per-Anime Settings** — Customize intro and outro skip durations individually for each show via the popup UI.
+- 🎛️ **Per-Anime Settings** — Customize intro and outro skip durations individually for each show via the popup UI **or the embedded panel on the episode page** (gear button in the "Wähle einen AniWorld Stream / Hoster" bar).
 
 ## Installation (Unpacked / Developer Mode)
 
@@ -38,7 +38,7 @@ Settings are saved per anime and persist across browser sessions.
 |-----------|------|
 | `manifest.json` | Manifest V3 config, permissions, script injection, icons |
 | `background.js` | Service worker — routes `video_ended` messages from player iframes to the main tab |
-| `content-main.js` | Runs on aniworld.to — saves active anime key to storage, handles next-episode navigation and the countdown overlay |
+| `content-main.js` | Runs on aniworld.to — saves active anime key to storage, handles next-episode/next-season navigation, the countdown overlay and the embedded settings panel |
 | `content-player.js` | Runs inside player iframes — detects the `<video>` element, presses the play button, applies intro/outro skipping |
 | `popup.html/css/js` | Settings UI — per-anime skip config, global toggles |
 | `icons/` | 16/48/128 px toolbar and store icons |
@@ -75,9 +75,12 @@ Store submission checklist:
 
 ### 1.1.0
 - Countdown overlay now uses the extension's own design tokens (`#637cf9` / `#181922`) instead of the orange accent.
-- Added Auto-Start Playback: the extension presses the player's play button on the next episode, with retries and a muted-autoplay fallback.
+- Added Auto-Start Playback: the extension presses the player's play button on the next episode. It now keeps asking for up to 30 s (players create the `<video>` element late), calls the player's own API when one is exposed (JW Player / Video.js), and falls back to muted autoplay when the browser refuses autoplay with sound.
+- Auto-Next continues with the first episode of the next season when the current season ends.
+- Settings panel embedded in the episode page: gear button in the "Wähle einen AniWorld Stream / Hoster" header bar, same design as the popup.
 - New toggle in the popup for Auto-Start Playback.
 - Added 16/48/128 px icons (the extension had none) and a `build.ps1` packaging script for store submission.
+- Fixed the anime detection regex for `s.to/serie/stream/...` (the README claimed s.to support, but only `anime/stream` was matched).
 
 ### 1.0.0
 - Initial release: auto-next, intro skip, outro skip, per-anime settings.

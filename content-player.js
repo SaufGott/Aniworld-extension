@@ -1,3 +1,5 @@
+// Content script for the hoster player iframes (VOE, Doodstream, Filemoon, Vidmoly, ...)
+
 // Exit immediately if this is running in the top main frame (guard for <all_urls>)
 if (window === window.top) {
     // Do nothing
@@ -15,14 +17,19 @@ const PLAY_BUTTON_SELECTORS = [
     '#play_video', '.big-play-button', '.play'
 ];
 
-const AUTOPLAY_RETRIES = 5;
-const AUTOPLAY_RETRY_DELAY = 1200;
+// Players keep creating the <video> element long after the page is loaded, so keep
+// asking for playback for a while instead of giving up after a single attempt.
+const START_WINDOW_MS = 30000;
+const START_RETRY_DELAY = 1500;
+const MAX_START_ATTEMPTS = 15;
 
 // Global state flags to prevent duplicate triggers across source reloads
 let globalHasSkippedIntro = false;
 let globalHasTriggeredOutro = false;
-let globalHasAutoStarted = false;
+let startAttempts = 0;
+let startDeadline = 0;
 let audioFallbackUsed = false;
+let gaveUpOnStart = false;
 
 let settings = {
     skipIntroEnabled: true,
@@ -40,7 +47,7 @@ function initializePlayerScript() {
     // 1. Detect parent anime from referrer first
     const referrer = document.referrer;
     if (referrer) {
-        const match = referrer.match(/(?:aniworld\.to|s\.to)\/anime\/stream\/([^/]+)/);
+        const match = referrer.match(/(?:aniworld\.to|s\.to)\/(?:anime|serie)\/stream\/([^/]+)/);
         if (match) {
             parsedAnimeKey = match[1];
             console.log(`[AniWorld Helper] Parent anime detected from referrer: "${parsedAnimeKey}"`);
@@ -103,14 +110,7 @@ function locateAndSetupVideo() {
     // so try the overlay once before polling.
     if (settings.autoPlayEnabled) {
         const button = findPlayButton();
-        if (button) {
-            try {
-                button.click();
-                console.log(`[AniWorld Helper] Pre-clicked play overlay (${button.id || button.className || 'player control'}).`);
-            } catch (error) {
-                console.log('[AniWorld Helper] Play overlay click failed:', error.message);
-            }
-        }
+        if (button) safeClick(button);
     }
 
     const pollInterval = setInterval(() => {
@@ -133,7 +133,8 @@ function setupVideoListeners(video) {
     video.addEventListener('loadstart', () => {
         globalHasSkippedIntro = false;
         globalHasTriggeredOutro = false;
-        globalHasAutoStarted = false;
+        startAttempts = 0;
+        gaveUpOnStart = false;
         console.log('[AniWorld Helper] Video source changed / reloaded. Skipper re-armed.');
     });
 
@@ -175,7 +176,10 @@ function setupVideoListeners(video) {
                 console.log('[AniWorld Helper] Intro seek failed:', error.message);
             }
         }
+        requestStart(video);
     });
+
+    video.addEventListener('canplay', () => requestStart(video));
 
     // Natural end of video — only fire if outro-skip hasn't already triggered navigation
     video.addEventListener('ended', () => {
@@ -185,56 +189,89 @@ function setupVideoListeners(video) {
         }
     });
 
-    // --- Auto-start playback (the play button the user would otherwise have to click) ---
-    if (settings.autoPlayEnabled && !globalHasAutoStarted) {
-        globalHasAutoStarted = true;
-        tryAutoStart(video);
-    }
+    requestStart(video);
 }
 
-async function tryAutoStart(video) {
-    for (let attempt = 1; attempt <= AUTOPLAY_RETRIES; attempt++) {
-        if (!video.paused) {
-            console.log('%c[AniWorld Helper] Playback started automatically.', 'color: #10B981; font-weight: bold;');
-            return;
-        }
+// Ask the player to start: its own API first, then the visible play overlay, then the element itself
+function requestStart(video) {
+    if (!settings.autoPlayEnabled || gaveUpOnStart) return;
+    if (!startDeadline) startDeadline = Date.now() + START_WINDOW_MS;
+    if (!video.paused) return;
 
-        const button = findPlayButton();
-        if (button) {
-            try {
-                button.click();
-                console.log(`[AniWorld Helper] Clicked play button (${button.id || button.className || 'player control'}).`);
-            } catch (error) {
-                console.log('[AniWorld Helper] Play button click failed:', error.message);
-            }
+    if (startAttempts >= MAX_START_ATTEMPTS || Date.now() > startDeadline) {
+        if (!gaveUpOnStart) {
+            gaveUpOnStart = true;
+            console.log('[AniWorld Helper] Could not start playback automatically. Please press play.');
         }
-
-        try {
-            await video.play();
-            console.log('%c[AniWorld Helper] Playback started automatically.', 'color: #10B981; font-weight: bold;');
-            return;
-        } catch (error) {
-            // Browsers block autoplay with sound until the page has a real user gesture.
-            // Muted autoplay is always allowed, so use it as a last resort and hand the
-            // audio back on the first click inside the player.
-            if (attempt === AUTOPLAY_RETRIES - 1 && !audioFallbackUsed) {
-                audioFallbackUsed = true;
-                video.muted = true;
-                document.addEventListener('click', () => {
-                    if (video.muted) {
-                        video.muted = false;
-                        console.log('[AniWorld Helper] Audio restored after user interaction.');
-                    }
-                }, { once: true });
-                console.log('[AniWorld Helper] Autoplay with sound is blocked — starting muted instead. Click anywhere in the player to get audio back.');
-            }
-
-            console.log(`[AniWorld Helper] Autoplay attempt ${attempt} failed (${error.name}). Retrying in ${AUTOPLAY_RETRY_DELAY}ms...`);
-            await sleep(AUTOPLAY_RETRY_DELAY);
-        }
+        return;
     }
 
-    console.log('[AniWorld Helper] Could not start playback automatically. Please press play.');
+    startAttempts += 1;
+
+    callPlayerApi();
+
+    const button = findPlayButton();
+    if (button) safeClick(button);
+
+    const result = video.play();
+    if (!result || typeof result.catch !== 'function') return;
+
+    result.then(() => {
+        console.log('%c[AniWorld Helper] Playback started automatically.', 'color: #10B981; font-weight: bold;');
+    }).catch((error) => {
+        // Browsers block autoplay with sound until the page has a real user gesture.
+        // Muted autoplay is always allowed, so use it as a fallback and hand the audio
+        // back on the first click inside the player.
+        if (error.name === 'NotAllowedError' && !audioFallbackUsed) {
+            audioFallbackUsed = true;
+            video.muted = true;
+            armAudioRestore(video);
+            console.log('[AniWorld Helper] Autoplay with sound is blocked by the browser — retrying muted. Click anywhere in the player to get audio back.');
+        } else {
+            console.log(`[AniWorld Helper] Start attempt ${startAttempts} failed (${error.name}). Retrying...`);
+        }
+
+        setTimeout(() => requestStart(video), START_RETRY_DELAY);
+    });
+}
+
+// Player APIs exposed on the hoster page
+function callPlayerApi() {
+    try {
+        const jw = window.jwplayer || window.jwPlayer;
+        if (typeof jw === 'function') {
+            const player = jw();
+            if (player && typeof player.play === 'function') {
+                player.play();
+                return true;
+            }
+        }
+    } catch (error) {
+        // Player not ready yet
+    }
+
+    try {
+        if (window.videojs && typeof window.videojs.getPlayer === 'function') {
+            const player = window.videojs.getPlayer();
+            if (player && typeof player.play === 'function') {
+                player.play();
+                return true;
+            }
+        }
+    } catch (error) {
+        // Player not ready yet
+    }
+
+    return false;
+}
+
+function armAudioRestore(video) {
+    document.addEventListener('click', () => {
+        if (video.muted) {
+            video.muted = false;
+            console.log('[AniWorld Helper] Audio restored after user interaction.');
+        }
+    }, { once: true });
 }
 
 function findPlayButton() {
@@ -256,6 +293,11 @@ function isClickable(element) {
     return rect.width > 0 && rect.height > 0;
 }
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+function safeClick(element) {
+    try {
+        element.click();
+        console.log(`[AniWorld Helper] Clicked play button (${element.id || element.className || 'player control'}).`);
+    } catch (error) {
+        console.log('[AniWorld Helper] Play button click failed:', error.message);
+    }
 }

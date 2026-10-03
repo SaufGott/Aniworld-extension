@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!url) return;
 
       // Match: matches https://aniworld.to/anime/stream/slug/... OR s.to/serie/stream/slug/...
-      const match = url.match(/(?:aniworld\.to|s\.to)\/anime\/stream\/([^/]+)/);
+      const match = url.match(/(?:aniworld\.to|s\.to)\/(?:anime|serie)\/stream\/([^/]+)/);
 
       if (match) {
         currentAnimeKey = match[1];
