@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AniWorld Helper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="extension-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" class="logo-icon">
+          <circle cx="12" cy="12" r="10" fill="currentColor" />
+          <path d="M12 6v12M6 12h12M15 9l-6 6" stroke="#000" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        <h1>AniWorld Helper</h1>
+      </div>
+    </header>
+
+    <!-- Global Toggles -->
+    <section class="section">
+      <div class="card toggle-card">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="label-primary">Auto-Next Episode</span>
+            <span class="label-secondary font-sm">Plays next episode when video ends</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="auto-next-toggle" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="toggle-row separator-top">
+          <div class="toggle-info">
+            <span class="label-primary">Skip Anime Intros</span>
+            <span class="label-secondary font-sm">Skips intro credits automatically</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="skip-intro-toggle" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="toggle-row separator-top">
+          <div class="toggle-info">
+            <span class="label-primary">Auto-Start Playback</span>
+            <span class="label-secondary font-sm">Presses the play button on the next episode</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="auto-play-toggle" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Current Watching Info -->
+    <section class="section">
+      <h2 class="section-title">Active Stream</h2>
+      <div id="no-active-tab" class="card empty-card">
+        <p>No active AniWorld stream detected.</p>
+        <p class="font-sm text-muted">Open an episode on aniworld.to to set its intro skip duration.</p>
+      </div>
+      <div id="active-tab-card" class="card active-card hidden">
+        <div class="active-badge">ACTIVE SESSION</div>
+        <h3 id="current-anime-title" class="anime-title">DBZ</h3>
+        <div class="input-form">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="intro-skip-seconds" class="font-sm text-muted">Intro Skip (sec):</label>
+              <input type="number" id="intro-skip-seconds" min="0" max="600" placeholder="e.g. 90">
+            </div>
+            <div class="input-group">
+              <label for="outro-skip-seconds" class="font-sm text-muted">Outro Skip (sec):</label>
+              <input type="number" id="outro-skip-seconds" min="0" max="600" placeholder="e.g. 120">
+            </div>
+          </div>
+          <button id="save-skip-btn" class="btn btn-primary full-width">Save Config</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Configured Anime List -->
+    <section class="section flex-grow">
+      <h2 class="section-title">Saved Configs</h2>
+      <div class="card list-card">
+        <ul id="saved-configs-list" class="configs-list">
+          <!-- Dynamically populated or empty placeholder -->
+          <li class="empty-list-item">No custom skips configured.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

@@ -15,7 +15,7 @@ jobs:
 
       - name: Create extension zip
         run: |
-          # Create a zip file with all extension files
+          # Store-ready package: all files at the root of the archive, nothing nested.
           zip -r aniworld-extension.zip \
             manifest.json \
             background.js \
@@ -24,6 +24,7 @@ jobs:
             popup.html \
             popup.css \
             popup.js \
+            icons/ \
             README.md \
             -x "*.git*" ".github/*"
 
